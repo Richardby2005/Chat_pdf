@@ -20,6 +20,10 @@ if 'processed_embeddings' not in st.session_state:
     st.session_state.processed_embeddings = None
 if 'embeddings_model' not in st.session_state:
     st.session_state.embeddings_model = None
+if 'faiss_index' not in st.session_state:
+    st.session_state.faiss_index = None
+if 'chunk_pages' not in st.session_state:
+    st.session_state.chunk_pages = None
 
 st.title("🤖 Chatbot RAG con Groq")
 
@@ -58,10 +62,12 @@ with st.sidebar:
                         chunk_overlap=chunk_overlap
                     )
                 
-                # Reutilizar chunks y embeddings ya procesados
+                # Reutilizar chunks, embeddings, índice FAISS y páginas ya procesados
                 st.session_state.rag_system.chunks = st.session_state.processed_chunks
                 st.session_state.rag_system.embeddings_list = st.session_state.processed_embeddings
                 st.session_state.rag_system.embeddings = st.session_state.embeddings_model
+                st.session_state.rag_system.faiss_index = st.session_state.faiss_index
+                st.session_state.rag_system.chunk_pages = st.session_state.chunk_pages
                 
                 st.session_state.current_mode = search_mode
                 st.success(f"✅ Cambiado a modo {search_mode}!")
@@ -92,10 +98,12 @@ with st.sidebar:
                         )
                     st.session_state.rag_system.process_document(uploaded_file)
                     
-                    # Guardar chunks y embeddings procesados
+                    # Guardar chunks, embeddings, índice FAISS y páginas procesados
                     st.session_state.processed_chunks = st.session_state.rag_system.chunks
                     st.session_state.processed_embeddings = st.session_state.rag_system.embeddings_list
                     st.session_state.embeddings_model = st.session_state.rag_system.embeddings
+                    st.session_state.faiss_index = st.session_state.rag_system.faiss_index
+                    st.session_state.chunk_pages = st.session_state.rag_system.chunk_pages
                     
                     st.session_state.current_mode = search_mode
                     st.success("✅ Documento procesado exitosamente!")
