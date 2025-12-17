@@ -112,7 +112,7 @@ class RAGIntegrado:
         mode='advanced': BM25+FAISS + Multi-hop + prompt forense
         """
         if not self.faiss_retriever:
-            return "⚠️ Por favor, procesa un documento primero."
+            return "Por favor, procesa un documento primero."
 
         if mode == "advanced":
             return self._advanced_mode(query)
@@ -157,7 +157,7 @@ Respuesta:"""
         if pages_used:
             pages_list = sorted(list(pages_used))
             pages_str = ", ".join([f"p. {p}" for p in pages_list])
-            return f"{response}\n\n📄 *Fuentes: {pages_str}*"
+            return f"{response}\n\n*Fuentes: {pages_str}*"
         
         return response
 
@@ -232,7 +232,7 @@ RESPUESTA RAZONADA (incluye citas de páginas):"""
         if pages_all:
             pages_list = sorted(list(pages_all))
             pages_str = ", ".join([f"p. {p}" for p in pages_list])
-            return f"{response}\n\n📄 **Fuentes consultadas:** {pages_str}"
+            return f"{response}\n\n**Fuentes consultadas:** {pages_str}"
         
         return response
 
