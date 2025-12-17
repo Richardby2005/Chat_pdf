@@ -33,7 +33,7 @@ Sistema de Retrieval-Augmented Generation (RAG) con interfaz Streamlit, búsqued
 
 ```bash
 # Clonar repositorio
-git clone https://github.com/tuusuario/Chat_pdf.git
+git clone https://github.com/Richardby2005/Chat_pdf.git
 cd Chat_pdf
 
 # Crear entorno virtual
