@@ -65,45 +65,55 @@ class RAGIntegrado:
             api_key=self.api_key
         )
 
-    def process_document(self, uploaded_file):
-        """Procesa el documento creando AMBOS retrievers (básico y mejorado)"""
+    def process_documents(self, uploaded_files):
+        """Procesa múltiples documentos creando AMBOS retrievers (básico y mejorado)"""
         
-        # Guardar archivo temporalmente para PyPDFLoader
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            tmp_file.write(uploaded_file.read())
-            tmp_path = tmp_file.name
+        all_docs = []
+        
+        # Procesar cada PDF
+        for uploaded_file in uploaded_files:
+            # Guardar archivo temporalmente para PyPDFLoader
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(uploaded_file.read())
+                tmp_path = tmp_file.name
 
-        try:
-            # Cargar PDF con metadata de páginas (LangChain lo hace automáticamente)
-            loader = PyPDFLoader(tmp_path)
-            docs = loader.load()
-            
-            # Chunking con configuración dinámica
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=self.chunk_size,
-                chunk_overlap=self.chunk_overlap,
-                separators=["\n\n", "\n", ".", " ", ""]
-            )
-            self.splits = text_splitter.split_documents(docs)
-            
-            # CREAR RETRIEVER BÁSICO (solo FAISS)
-            vectorstore = FAISS.from_documents(self.splits, self.embeddings)
-            self.faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-            
-            # CREAR RETRIEVER MEJORADO (BM25 + FAISS)
-            faiss_retriever_advanced = vectorstore.as_retriever(search_kwargs={"k": 5})
-            bm25_retriever = BM25Retriever.from_documents(self.splits)
-            bm25_retriever.k = 5
-            
-            self.ensemble_retriever = SimpleEnsembleRetriever(
-                retrievers=[bm25_retriever, faiss_retriever_advanced],
-                weights=[0.4, 0.6]
-            )
-            
-            return len(self.splits)
-            
-        finally:
-            os.unlink(tmp_path)
+            try:
+                # Cargar PDF con metadata de páginas (LangChain lo hace automáticamente)
+                loader = PyPDFLoader(tmp_path)
+                docs = loader.load()
+                
+                # Agregar nombre del archivo fuente a la metadata
+                for doc in docs:
+                    doc.metadata['source_file'] = uploaded_file.name
+                
+                all_docs.extend(docs)
+                
+            finally:
+                os.unlink(tmp_path)
+        
+        # Chunking con configuración dinámica sobre TODOS los documentos
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            separators=["\n\n", "\n", ".", " ", ""]
+        )
+        self.splits = text_splitter.split_documents(all_docs)
+        
+        # CREAR RETRIEVER BÁSICO (solo FAISS)
+        vectorstore = FAISS.from_documents(self.splits, self.embeddings)
+        self.faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
+        
+        # CREAR RETRIEVER MEJORADO (BM25 + FAISS)
+        faiss_retriever_advanced = vectorstore.as_retriever(search_kwargs={"k": 5})
+        bm25_retriever = BM25Retriever.from_documents(self.splits)
+        bm25_retriever.k = 5
+        
+        self.ensemble_retriever = SimpleEnsembleRetriever(
+            retrievers=[bm25_retriever, faiss_retriever_advanced],
+            weights=[0.4, 0.6]
+        )
+        
+        return len(self.splits)
 
     def get_answer(self, query, mode="basic"):
         """
@@ -131,9 +141,13 @@ class RAGIntegrado:
         context_text = self._format_docs(docs)
         pages_used = self._extract_pages(docs)
         
-        # PROMPT BÁSICO (similar al original)
-        template = """Basándote ÚNICAMENTE en el siguiente contexto, responde la pregunta.
-Si la información no está en el contexto, responde: "No hay suficiente información en el documento para responder esta pregunta."
+        # PROMPT BÁSICO mejorado para preguntas generales
+        template = """Basándote en el siguiente contexto del documento, responde la pregunta de manera clara y concisa.
+
+INSTRUCCIONES:
+- Si la pregunta es general (ej: "de qué trata", "tema principal", "resumen"), proporciona un resumen basado en el contexto disponible.
+- Si la pregunta es específica y la información exacta no está en el contexto, indica que no se encontró esa información específica.
+- Siempre basa tu respuesta en el contexto proporcionado.
 
 Contexto:
 {context}
@@ -153,11 +167,11 @@ Respuesta:"""
         
         response = chain.invoke(query)
         
-        # Agregar referencias de páginas
+        # Agregar referencias de archivos y páginas
         if pages_used:
-            pages_list = sorted(list(pages_used))
-            pages_str = ", ".join([f"p. {p}" for p in pages_list])
-            return f"{response}\n\n*Fuentes: {pages_str}*"
+            sources_list = sorted(list(pages_used), key=lambda x: (x[0], x[1]))
+            sources_str = ", ".join([f"{file} p.{page}" for file, page in sources_list])
+            return f"{response}\n\n*Fuentes: {sources_str}*"
         
         return response
 
@@ -200,15 +214,15 @@ Lista SOLO los conceptos separados por comas (máximo 3):"""
             context_text = initial_context
             pages_all = pages_initial
         
-        # PROMPT FORENSE/ACADÉMICO
-        template = """Eres un asistente académico experto especializado en análisis forense de documentos.
+        # PROMPT FORENSE/ACADÉMICO mejorado
+        template = """Eres un asistente académico experto especializado en análisis de documentos.
 
-INSTRUCCIONES CLAVE:
-1. Tu objetivo es conectar hechos dispersos en el documento (RAZONAMIENTO MULTI-HOP).
-2. Usa ESTRICTAMENTE el contexto proporcionado.
-3. Cita SIEMPRE las páginas de origen en tu respuesta (ej: según la página 5...).
+INSTRUCCIONES:
+1. Para preguntas generales (ej: "de qué trata", "tema principal"): Proporciona un análisis comprehensivo basado en el contexto.
+2. Para preguntas específicas: Conecta hechos dispersos usando razonamiento multi-hop.
+3. Usa el contexto proporcionado y cita las páginas de origen.
 4. Si conectas información de múltiples páginas, explica la conexión lógica.
-5. Si no hay información suficiente, indícalo claramente.
+5. Solo indica "información insuficiente" si realmente no hay datos relevantes para una pregunta específica.
 
 CONTEXTO RECUPERADO:
 {context}
@@ -228,11 +242,11 @@ RESPUESTA RAZONADA (incluye citas de páginas):"""
         
         response = chain.invoke(query)
         
-        # Agregar referencias de páginas al final
+        # Agregar referencias de archivos y páginas al final
         if pages_all:
-            pages_list = sorted(list(pages_all))
-            pages_str = ", ".join([f"p. {p}" for p in pages_list])
-            return f"{response}\n\n**Fuentes consultadas:** {pages_str}"
+            sources_list = sorted(list(pages_all), key=lambda x: (x[0], x[1]))
+            sources_str = ", ".join([f"{file} p.{page}" for file, page in sources_list])
+            return f"{response}\n\n**Fuentes consultadas:** {sources_str}"
         
         return response
 
@@ -247,18 +261,20 @@ RESPUESTA RAZONADA (incluye citas de páginas):"""
         return unique
 
     def _format_docs(self, docs):
-        """Formatea documentos con información de página (usando metadata de LangChain)"""
+        """Formatea documentos con información de archivo y página"""
         formatted = []
         for doc in docs:
             # PyPDFLoader guarda el número de página en metadata['page']
             page_num = doc.metadata.get('page', 0) + 1  # PyPDFLoader usa índice 0
-            formatted.append(f"[FRAGMENTO PÁG. {page_num}]:\n{doc.page_content}")
+            source_file = doc.metadata.get('source_file', 'documento')
+            formatted.append(f"[{source_file} - PÁG. {page_num}]:\n{doc.page_content}")
         return "\n\n".join(formatted)
 
     def _extract_pages(self, docs):
-        """Extrae números de página únicos de los documentos (usando metadata de LangChain)"""
-        pages = set()
+        """Extrae información de archivo y página únicos de los documentos"""
+        sources = set()
         for doc in docs:
             page_num = doc.metadata.get('page', 0) + 1
-            pages.add(page_num)
-        return pages
+            source_file = doc.metadata.get('source_file', 'documento')
+            sources.add((source_file, page_num))
+        return sources
