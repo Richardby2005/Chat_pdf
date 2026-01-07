@@ -36,10 +36,6 @@ Sistema de Retrieval-Augmented Generation (RAG) con interfaz Streamlit, búsqued
 git clone https://github.com/Richardby2005/Chat_pdf.git
 cd Chat_pdf
 
-# Crear entorno virtual
-python3 -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-
 # Instalar dependencias
 pip install -r requirements.txt
 
