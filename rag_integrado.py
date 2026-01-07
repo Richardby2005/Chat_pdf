@@ -139,15 +139,17 @@ class RAGIntegrado:
             return "No hay suficiente información en el documento para responder esta pregunta."
         
         context_text = self._format_docs(docs)
-        pages_used = self._extract_pages(docs)
         
-        # PROMPT BÁSICO mejorado para preguntas generales
+        # PROMPT BÁSICO mejorado para preguntas generales con referencias inline
         template = """Basándote en el siguiente contexto del documento, responde la pregunta de manera clara y concisa.
 
 INSTRUCCIONES:
 - Si la pregunta es general (ej: "de qué trata", "tema principal", "resumen"), proporciona un resumen basado en el contexto disponible.
 - Si la pregunta es específica y la información exacta no está en el contexto, indica que no se encontró esa información específica.
 - Siempre basa tu respuesta en el contexto proporcionado.
+- IMPORTANTE: Incluye las referencias de páginas como links dentro del texto usando este formato: 🔗 página X
+- Cuando menciones información específica, coloca inmediatamente la referencia de página.
+- NO incluyas una sección de fuentes al final.
 
 Contexto:
 {context}
@@ -167,12 +169,6 @@ Respuesta:"""
         
         response = chain.invoke(query)
         
-        # Agregar referencias de archivos y páginas
-        if pages_used:
-            sources_list = sorted(list(pages_used), key=lambda x: (x[0], x[1]))
-            sources_str = ", ".join([f"{file} p.{page}" for file, page in sources_list])
-            return f"{response}\n\n*Fuentes: {sources_str}*"
-        
         return response
 
     def _advanced_mode(self, query):
@@ -181,7 +177,6 @@ Respuesta:"""
         # Paso 1: Búsqueda inicial con retriever híbrido
         initial_docs = self.ensemble_retriever.invoke(query)
         initial_context = self._format_docs(initial_docs)
-        pages_initial = self._extract_pages(initial_docs)
         
         # Paso 2: Expansión de conceptos (Multi-hop)
         extraction_prompt = f"""Analiza la pregunta y el contexto inicial. Identifica hasta 3 conceptos clave adicionales para investigar más a fondo.
@@ -207,29 +202,30 @@ Lista SOLO los conceptos separados por comas (máximo 3):"""
             
             final_docs = unique_docs[:10]
             context_text = self._format_docs(final_docs)
-            pages_all = self._extract_pages(final_docs)
             
         except Exception as e:
             # Fallback a búsqueda básica si falla la expansión
             context_text = initial_context
-            pages_all = pages_initial
         
-        # PROMPT FORENSE/ACADÉMICO mejorado
+        # PROMPT FORENSE/ACADÉMICO mejorado con referencias inline
         template = """Eres un asistente académico experto especializado en análisis de documentos.
 
 INSTRUCCIONES:
 1. Para preguntas generales (ej: "de qué trata", "tema principal"): Proporciona un análisis comprehensivo basado en el contexto.
 2. Para preguntas específicas: Conecta hechos dispersos usando razonamiento multi-hop.
-3. Usa el contexto proporcionado y cita las páginas de origen.
+3. Usa el contexto proporcionado e incluye referencias de páginas DENTRO del texto.
 4. Si conectas información de múltiples páginas, explica la conexión lógica.
 5. Solo indica "información insuficiente" si realmente no hay datos relevantes para una pregunta específica.
+6. IMPORTANTE: Incluye las referencias de páginas como links dentro del texto usando este formato: 🔗 página X
+7. Coloca la referencia inmediatamente después de mencionar información específica.
+8. NO incluyas una sección de "Fuentes consultadas" al final.
 
 CONTEXTO RECUPERADO:
 {context}
 
 PREGUNTA DEL USUARIO: {question}
 
-RESPUESTA RAZONADA (incluye citas de páginas):"""
+RESPUESTA RAZONADA (con citas inline):"""
 
         prompt = ChatPromptTemplate.from_template(template)
         
@@ -241,12 +237,6 @@ RESPUESTA RAZONADA (incluye citas de páginas):"""
         )
         
         response = chain.invoke(query)
-        
-        # Agregar referencias de archivos y páginas al final
-        if pages_all:
-            sources_list = sorted(list(pages_all), key=lambda x: (x[0], x[1]))
-            sources_str = ", ".join([f"{file} p.{page}" for file, page in sources_list])
-            return f"{response}\n\n**Fuentes consultadas:** {sources_str}"
         
         return response
 

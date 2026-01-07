@@ -5,7 +5,7 @@ from rag_integrado import RAGIntegrado
 
 load_dotenv()
 
-st.set_page_config(page_title="RAG Híbrido", page_icon="📄", layout="wide")
+st.set_page_config(page_title="RAG Híbrido", page_icon="�", layout="wide")
 
 # CSS personalizado para el diseño del chat
 st.markdown("""
@@ -98,7 +98,7 @@ with st.sidebar:
     # Radio buttons con descripciones integradas
     analysis_mode = st.radio(
         "Seleccionar modo:",
-        ["🚀 Rápido", "📚 Académico", "🔬 Exhaustivo"],
+        ["Rápido", "Académico", "Exhaustivo"],
         captions=[
             "Chunks pequeños (400 chars) • Búsqueda básica",
             "Chunks medianos (800 chars) • Búsqueda híbrida + Multi-hop",
@@ -108,9 +108,9 @@ with st.sidebar:
     
     # Configuración de chunks según el modo seleccionado
     mode_configs = {
-        "🚀 Rápido": {"chunk_size": 400, "chunk_overlap": 50, "search_mode": "basic"},
-        "📚 Académico": {"chunk_size": 800, "chunk_overlap": 150, "search_mode": "advanced"},
-        "🔬 Exhaustivo": {"chunk_size": 1200, "chunk_overlap": 250, "search_mode": "advanced"}
+        "Rápido": {"chunk_size": 400, "chunk_overlap": 50, "search_mode": "basic"},
+        "Académico": {"chunk_size": 800, "chunk_overlap": 150, "search_mode": "advanced"},
+        "Exhaustivo": {"chunk_size": 1200, "chunk_overlap": 250, "search_mode": "advanced"}
     }
     
     current_config = mode_configs[analysis_mode]
@@ -145,8 +145,8 @@ with st.sidebar:
                         st.session_state.last_mode = analysis_mode
                         st.session_state.chat_history = []
                         
-                        st.success(f"✅ {len(uploaded_files)} documento(s) procesado(s) exitosamente!")
-                        st.info(f"📊 {num_chunks} fragmentos indexados con búsqueda híbrida")
+                        st.success(f"{len(uploaded_files)} documento(s) procesado(s) exitosamente!")
+                        st.info(f"{num_chunks} fragmentos indexados con búsqueda híbrida")
                     except Exception as e:
                         st.error(f"Error al procesar: {str(e)}")
     
